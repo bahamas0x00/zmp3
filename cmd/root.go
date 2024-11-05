@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/bahamas0x00/zmp3/pkg"
+	"github.com/bahamas0x00/zmp3/pkg/common"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if !pkg.IsconfigFileExist() {
+		if !pkg.IsConfigFileExist() {
 			err := pkg.WriteDefaultConfig()
 			if err != nil {
 				return err
@@ -35,15 +36,16 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if setConfig {
-			return setNewConfig()
-		}
 		if version {
 			return printVersion()
 		}
 		if showConfig {
 			return showCurrentConfig()
 		}
+		if setConfig {
+			return setNewConfig()
+		}
+
 		return cmd.Help()
 
 	},
@@ -68,27 +70,10 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	cobra.OnInitialize()
-	rootCmd.Flags().BoolVarP(&version, "version", "v", false, "set new configuration")
+	rootCmd.Flags().BoolVarP(&version, "version", "v", false, "show cli version")
+	rootCmd.Flags().BoolVarP(&showConfig, "show config", "s", false, "show current configuration")
 	rootCmd.Flags().BoolVarP(&setConfig, "set config", "c", false, "set new configuration")
-	rootCmd.Flags().BoolVarP(&showConfig, "show config", "s", false, "set new configuration")
 
-}
-
-func setNewConfig() error {
-	cfg, err := pkg.ReadConfigFile()
-	if err != nil {
-		return err
-	}
-	err = cfg.IsValidConfig()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("MP3 Quality: %d\n"+
-		"MP4 Quality: %d\n"+
-		"Directory: %s",
-		cfg.Mp3Quality, cfg.Mp4Quality, cfg.GetDownloadFolder())
-
-	return nil
 }
 
 func printVersion() error {
@@ -98,6 +83,64 @@ func printVersion() error {
 
 func showCurrentConfig() error {
 	cfg, err := pkg.ReadConfigFile()
-
+	if err != nil {
+		return err
+	}
+	err = cfg.IsValidConfig()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("MP3 Quality: %d\n"+"MP4 Quality: %d\n"+"Directory: %s",
+		cfg.Mp3Quality, cfg.Mp4Quality, cfg.GetDownloadFolder(),
+	)
 	return nil
+}
+
+func setNewConfig() error {
+	cfg, err := promptSetNewConfig()
+	if err != nil {
+		return err
+	}
+
+	err = pkg.WriteConfigFile(cfg)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Override new configuration with details:")
+
+	fmt.Printf("MP3 Quality: %d\n"+
+		"MP4 Quality: %d\n"+
+		"Directory: %s",
+		cfg.Mp3Quality, cfg.Mp4Quality, cfg.GetDownloadFolder())
+	return nil
+}
+
+func promptSetNewConfig() (*pkg.Config, error) {
+	cfg := &pkg.Config{}
+	mp3Quality, err := common.PromptInteger("MP3 Quality")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pkg.IsValidMP3Quality(mp3Quality); err != nil {
+		return nil, err
+	}
+	cfg.Mp3Quality = mp3Quality
+
+	mp4Quality, err := common.PromptInteger("MP4 Quality")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pkg.IsValidMP4Quality(mp4Quality); err != nil {
+		return nil, err
+	}
+	cfg.Mp4Quality = mp4Quality
+
+	directory, err := common.PromptString("Directory")
+	if err != nil {
+		return nil, err
+	}
+	cfg.Directory = directory
+	return cfg, nil
 }
